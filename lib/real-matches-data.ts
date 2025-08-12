@@ -9,12 +9,12 @@ export async function getRealMatchesData(homeTeam?: string, awayTeam?: string, l
     // Szűrés csapatok alapján
     if (homeTeam && awayTeam) {
       query = query.or(
-        `and(home_team.ilike.%${homeTeam}%,away_team.ilike.%${awayTeam}%),and(home_team.ilike.%${awayTeam}%,away_team.ilike.%${homeTeam}%)`,
+        `and(home_team.ilike.*${homeTeam}*,away_team.ilike.*${awayTeam}*),and(home_team.ilike.*${awayTeam}*,away_team.ilike.*${homeTeam}*)`,
       )
     } else if (homeTeam) {
-      query = query.or(`home_team.ilike.%${homeTeam}%,away_team.ilike.%${homeTeam}%`)
+      query = query.or(`home_team.ilike.*${homeTeam}*,away_team.ilike.*${homeTeam}*`)
     } else if (awayTeam) {
-      query = query.or(`home_team.ilike.%${awayTeam}%,away_team.ilike.%${awayTeam}%`)
+      query = query.or(`home_team.ilike.*${awayTeam}*,away_team.ilike.*${awayTeam}*`)
     }
 
     const { data, error } = await query.order("created_at", { ascending: false }).limit(limit)
@@ -130,7 +130,7 @@ export async function getHeadToHeadMatches(team1: string, team2: string): Promis
       .from("matches")
       .select("*")
       .or(
-        `and(home_team.ilike.%${team1}%,away_team.ilike.%${team2}%),and(home_team.ilike.%${team2}%,away_team.ilike.%${team1}%)`,
+        `and(home_team.ilike.*${team1}*,away_team.ilike.*${team2}*),and(home_team.ilike.*${team2}*,away_team.ilike.*${team1}*)`,
       )
       .order("created_at", { ascending: false })
       .limit(20)
