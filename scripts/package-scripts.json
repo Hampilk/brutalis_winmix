@@ -1,0 +1,15 @@
+{
+  "scripts": {
+    "check:code": "node scripts/code-quality-check.js",
+    "check:modified": "node scripts/code-quality-check.js --modified-only",
+    "check:all": "node scripts/code-quality-check.js --all",
+    "check:typescript": "tsc --noEmit --skipLibCheck",
+    "check:typescript-modified": "node scripts/typescript-check-modified.js",
+    "fix:imports": "node scripts/fix-imports.js",
+    "analyze:bundle": "npm run build && npx @next/bundle-analyzer",
+    "test:unit": "echo 'Unit tests not configured yet'",
+    "test:integration": "echo 'Integration tests not configured yet'",
+    "lint:fix": "echo 'ESLint not configured yet'",
+    "format": "echo 'Prettier not configured yet'"
+  }
+}

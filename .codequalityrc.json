@@ -1,0 +1,18 @@
+{
+  "extensions": [".ts", ".tsx", ".js", ".jsx"],
+  "includeDirs": ["src", "components", "lib", "app", "pages", "utils"],
+  "excludeDirs": ["node_modules", ".next", "dist", "build", ".git", "coverage"],
+  "excludeFiles": ["*.test.ts", "*.test.js", "*.spec.ts", "*.spec.js", "*.d.ts"],
+  "maxFileSize": 1048576,
+  "enableESLint": true,
+  "enablePrettier": true,
+  "enableTypeScript": true,
+  "enableCustomRules": true,
+  "customRulesConfig": {
+    "allowConsoleLog": false,
+    "allowTodoComments": true,
+    "allowAnyType": false,
+    "requireErrorHandling": true,
+    "maxLineLength": 120
+  }
+}

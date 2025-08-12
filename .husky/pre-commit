@@ -1,0 +1,17 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+echo "🚀 Pre-commit ellenőrzések indulnak..."
+
+# Run lint-staged
+npx lint-staged
+
+# Run TypeScript check on modified files
+npm run check:typescript-modified
+
+if [ $? -ne 0 ]; then
+  echo "❌ Pre-commit ellenőrzés megbukott!"
+  exit 1
+fi
+
+echo "✅ Pre-commit ellenőrzés sikeres!"
