@@ -1,18 +1,24 @@
 import { supabase, isSupabaseConfigured } from "./supabase"
 import type { Match, FormattedMatch } from "./supabase"
+import { offlineSearchMatches, offlineSearchByTeam, offlineTeamNames, OFFLINE_MATCHES } from "./offline-data"
 
 // Hibaüzenet a hiányzó konfiguráció esetén
 const SUPABASE_ERROR = "Supabase nincs megfelelően konfigurálva. Ellenőrizd a környezeti változókat."
 const TABLE_NOT_FOUND_ERROR =
   "A 'matches' tábla nem található. Kérlek, győződj meg róla, hogy létrehoztad a Supabase adatbázisodban."
 
+// Prevent wildcard/LIKE injection by escaping % and _ characters
+function sanitizeIlikePattern(input: string): string {
+  // Normalize spaces and trim
+  const normalized = input.replace(/\s+/g, " ").trim()
+  // Escape LIKE wildcards (% and _)
+  return normalized.replace(/[%]/g, "\\%").replace(/[_]/g, "\\_")
+}
+
 // Összes meccs lekérdezése (limitált, hogy ne legyen túl lassú)
 export async function getAllMatches(limit = 100): Promise<Match[]> {
-  if (!isSupabaseConfigured()) {
-    throw new Error(SUPABASE_ERROR)
-  }
-  if (!supabase) {
-    throw new Error("Supabase kliens nincs inicializálva.")
+  if (!isSupabaseConfigured() || !supabase) {
+    return OFFLINE_MATCHES.slice().sort((a, b) => (a.match_time < b.match_time ? 1 : -1)).slice(0, limit)
   }
 
   const { data, error } = await supabase
@@ -34,20 +40,20 @@ export async function getAllMatches(limit = 100): Promise<Match[]> {
 
 // Keresési függvény hazai és vendég csapat alapján
 export async function searchMatches(homeTeam?: string, awayTeam?: string, limit = 50): Promise<Match[]> {
-  if (!isSupabaseConfigured()) {
-    throw new Error(SUPABASE_ERROR)
-  }
-  if (!supabase) {
-    throw new Error("Supabase kliens nincs inicializálva.")
+  if (!isSupabaseConfigured() || !supabase) {
+    return offlineSearchMatches(homeTeam?.trim() || undefined, awayTeam?.trim() || undefined, limit)
   }
 
   let query = supabase.from("matches").select("*")
 
-  if (homeTeam && homeTeam.trim()) {
-    query = query.ilike("home_team", `%${homeTeam.trim()}%`)
+  const home = homeTeam && homeTeam.trim() ? sanitizeIlikePattern(homeTeam) : undefined
+  const away = awayTeam && awayTeam.trim() ? sanitizeIlikePattern(awayTeam) : undefined
+
+  if (home) {
+    query = query.ilike("home_team", `%${home}%`)
   }
-  if (awayTeam && awayTeam.trim()) {
-    query = query.ilike("away_team", `%${awayTeam.trim()}%`)
+  if (away) {
+    query = query.ilike("away_team", `%${away}%`)
   }
 
   query = query.order("match_time", { ascending: false }).limit(limit)
@@ -67,11 +73,8 @@ export async function searchMatches(homeTeam?: string, awayTeam?: string, limit 
 
 // Csapat nevek lekérdezése autocomplete-hez
 export async function getTeamNames(): Promise<string[]> {
-  if (!isSupabaseConfigured()) {
-    throw new Error(SUPABASE_ERROR)
-  }
-  if (!supabase) {
-    throw new Error("Supabase kliens nincs inicializálva.")
+  if (!isSupabaseConfigured() || !supabase) {
+    return offlineTeamNames()
   }
 
   const { data, error } = await supabase.from("matches").select("home_team, away_team").limit(1000)
@@ -108,17 +111,16 @@ export async function getFormattedMatches(limit = 100): Promise<FormattedMatch[]
 
 // Meccs keresése csapat név alapján
 export async function searchMatchesByTeam(teamName: string, limit = 50): Promise<Match[]> {
-  if (!isSupabaseConfigured()) {
-    throw new Error(SUPABASE_ERROR)
+  if (!isSupabaseConfigured() || !supabase) {
+    return offlineSearchByTeam(teamName, limit)
   }
-  if (!supabase) {
-    throw new Error("Supabase kliens nincs inicializálva.")
-  }
+
+  const safe = sanitizeIlikePattern(teamName)
 
   const { data, error } = await supabase
     .from("matches")
     .select("*")
-    .or(`home_team.ilike.%${teamName}%,away_team.ilike.%${teamName}%`)
+    .or(`home_team.ilike.%${safe}%,away_team.ilike.%${safe}%`)
     .order("match_time", { ascending: false })
     .limit(limit)
 
@@ -135,17 +137,16 @@ export async function searchMatchesByTeam(teamName: string, limit = 50): Promise
 
 // Csapat statisztikák lekérdezése
 export async function getTeamStatistics(teamName: string): Promise<any> {
-  if (!isSupabaseConfigured()) {
-    throw new Error(SUPABASE_ERROR)
+  if (!isSupabaseConfigured() || !supabase) {
+    return offlineSearchByTeam(teamName, 100)
   }
-  if (!supabase) {
-    throw new Error("Supabase kliens nincs inicializálva.")
-  }
+
+  const safe = sanitizeIlikePattern(teamName)
 
   const { data, error } = await supabase
     .from("matches")
     .select("*")
-    .or(`home_team.ilike.%${teamName}%,away_team.ilike.%${teamName}%`)
+    .or(`home_team.ilike.%${safe}%,away_team.ilike.%${safe}%`)
     .order("match_time", { ascending: false })
     .limit(100)
 
