@@ -1,0 +1,18 @@
+export const VIRTUAL_TEAMS: string[] = [
+  "Alaves",
+  "Barcelona",
+  "Bilbao",
+  "Getafe",
+  "Girona",
+  "Las Palmas",
+  "Madrid Fehér (Madrid White)",
+  "Madrid Piros (Madrid Red)",
+  "Mallorca",
+  "Osasuna",
+  "San Sebastian",
+  "Sevilla Piros",
+  "Sevilla Zöld",
+  "Valencia",
+  "Vigo",
+  "Villarreal",
+]

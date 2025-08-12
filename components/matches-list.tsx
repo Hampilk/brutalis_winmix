@@ -1,12 +1,14 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { Search, Calendar, Users, Target, Loader2 } from "lucide-react"
-import { searchMatches, getTeamNames, searchMatchesByTeam } from "@/lib/matches"
+import { searchMatches, searchMatchesByTeam } from "@/lib/matches"
+import { VIRTUAL_TEAMS } from "@/lib/teams"
 import { calculateStatistics } from "@/lib/football-statistics"
 import type { Match } from "@/lib/supabase"
 import type { StatisticsResult } from "@/lib/football-statistics"
@@ -23,22 +25,8 @@ export default function MatchesList() {
   const [error, setError] = useState<string | null>(null)
   const [homeTeam, setHomeTeam] = useState("")
   const [awayTeam, setAwayTeam] = useState("")
-  const [teamNames, setTeamNames] = useState<string[]>([])
   const [statistics, setStatistics] = useState<StatisticsResult | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
-
-  // Csapat nevek betöltése
-  useEffect(() => {
-    const loadTeamNames = async () => {
-      try {
-        const names = await getTeamNames()
-        setTeamNames(names)
-      } catch (err) {
-        console.error("Hiba a csapat nevek betöltése során:", err)
-      }
-    }
-    loadTeamNames()
-  }, [])
 
   // Keresés végrehajtása
   const handleSearch = async () => {
@@ -87,11 +75,7 @@ export default function MatchesList() {
     setError(null)
   }
 
-  // Csapat név szűrés autocomplete-hez
-  const getFilteredTeamNames = (query: string) => {
-    if (!query.trim()) return []
-    return teamNames.filter((name) => name.toLowerCase().includes(query.toLowerCase())).slice(0, 10)
-  }
+  
 
   return (
     <div className="space-y-8">
@@ -108,52 +92,34 @@ export default function MatchesList() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Hazai csapat</label>
-              <div className="relative">
-                <Input
-                  placeholder="pl. Barcelona"
-                  value={homeTeam}
-                  onChange={(e) => setHomeTeam(e.target.value)}
-                  className="rounded-2xl"
-                />
-                {homeTeam && (
-                  <div className="absolute top-full left-0 right-0 bg-white border rounded-lg shadow-lg z-10 max-h-40 overflow-y-auto">
-                    {getFilteredTeamNames(homeTeam).map((name, index) => (
-                      <button
-                        key={index}
-                        className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm"
-                        onClick={() => setHomeTeam(name)}
-                      >
-                        {name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <Select value={homeTeam} onValueChange={(v) => setHomeTeam(v)}>
+                <SelectTrigger className="rounded-2xl w-full">
+                  <SelectValue placeholder="Válassz hazai csapatot" />
+                </SelectTrigger>
+                <SelectContent>
+                  {VIRTUAL_TEAMS.map((name) => (
+                    <SelectItem key={name} value={name}>
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Vendég csapat</label>
-              <div className="relative">
-                <Input
-                  placeholder="pl. Real Madrid"
-                  value={awayTeam}
-                  onChange={(e) => setAwayTeam(e.target.value)}
-                  className="rounded-2xl"
-                />
-                {awayTeam && (
-                  <div className="absolute top-full left-0 right-0 bg-white border rounded-lg shadow-lg z-10 max-h-40 overflow-y-auto">
-                    {getFilteredTeamNames(awayTeam).map((name, index) => (
-                      <button
-                        key={index}
-                        className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm"
-                        onClick={() => setAwayTeam(name)}
-                      >
-                        {name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <Select value={awayTeam} onValueChange={(v) => setAwayTeam(v)}>
+                <SelectTrigger className="rounded-2xl w-full">
+                  <SelectValue placeholder="Válassz vendég csapatot" />
+                </SelectTrigger>
+                <SelectContent>
+                  {VIRTUAL_TEAMS.map((name) => (
+                    <SelectItem key={name} value={name}>
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -240,7 +206,7 @@ export default function MatchesList() {
                 >
                   <div className="flex items-center gap-4">
                     <div className="text-sm text-slate-600">
-                      {new Date(match.match_time).toLocaleDateString("hu-HU")}
+                      {match.match_time}
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{match.home_team}</span>

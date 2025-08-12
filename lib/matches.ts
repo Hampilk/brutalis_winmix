@@ -1,6 +1,5 @@
 import { supabase, isSupabaseConfigured } from "./supabase"
 import type { Match, FormattedMatch } from "./supabase"
-import { offlineSearchMatches, offlineSearchByTeam, offlineTeamNames, OFFLINE_MATCHES } from "./offline-data"
 
 // Hibaüzenet a hiányzó konfiguráció esetén
 const SUPABASE_ERROR = "Supabase nincs megfelelően konfigurálva. Ellenőrizd a környezeti változókat."
@@ -18,13 +17,13 @@ function sanitizeIlikePattern(input: string): string {
 // Összes meccs lekérdezése (limitált, hogy ne legyen túl lassú)
 export async function getAllMatches(limit = 100): Promise<Match[]> {
   if (!isSupabaseConfigured() || !supabase) {
-    return OFFLINE_MATCHES.slice().sort((a, b) => (a.match_time < b.match_time ? 1 : -1)).slice(0, limit)
+    throw new Error(SUPABASE_ERROR)
   }
 
   const { data, error } = await supabase
     .from("matches")
     .select("*")
-    .order("match_time", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(limit)
 
   if (error) {
@@ -41,7 +40,7 @@ export async function getAllMatches(limit = 100): Promise<Match[]> {
 // Keresési függvény hazai és vendég csapat alapján
 export async function searchMatches(homeTeam?: string, awayTeam?: string, limit = 50): Promise<Match[]> {
   if (!isSupabaseConfigured() || !supabase) {
-    return offlineSearchMatches(homeTeam?.trim() || undefined, awayTeam?.trim() || undefined, limit)
+    throw new Error(SUPABASE_ERROR)
   }
 
   let query = supabase.from("matches").select("*")
@@ -56,7 +55,7 @@ export async function searchMatches(homeTeam?: string, awayTeam?: string, limit 
     query = query.ilike("away_team", `%${away}%`)
   }
 
-  query = query.order("match_time", { ascending: false }).limit(limit)
+  query = query.order("created_at", { ascending: false }).limit(limit)
 
   const { data, error } = await query
 
@@ -74,7 +73,7 @@ export async function searchMatches(homeTeam?: string, awayTeam?: string, limit 
 // Csapat nevek lekérdezése autocomplete-hez
 export async function getTeamNames(): Promise<string[]> {
   if (!isSupabaseConfigured() || !supabase) {
-    return offlineTeamNames()
+    throw new Error(SUPABASE_ERROR)
   }
 
   const { data, error } = await supabase.from("matches").select("home_team, away_team").limit(1000)
@@ -99,7 +98,7 @@ export async function getFormattedMatches(limit = 100): Promise<FormattedMatch[]
 
   return matches.map((match) => ({
     id: match.id,
-    match_date: new Date(match.match_time).toLocaleDateString("hu-HU"),
+    match_date: match.match_time,
     home_team: match.home_team,
     away_team: match.away_team,
     result: `${match.full_time_home_goals}-${match.full_time_away_goals}`,
@@ -112,7 +111,7 @@ export async function getFormattedMatches(limit = 100): Promise<FormattedMatch[]
 // Meccs keresése csapat név alapján
 export async function searchMatchesByTeam(teamName: string, limit = 50): Promise<Match[]> {
   if (!isSupabaseConfigured() || !supabase) {
-    return offlineSearchByTeam(teamName, limit)
+    throw new Error(SUPABASE_ERROR)
   }
 
   const safe = sanitizeIlikePattern(teamName)
@@ -121,7 +120,7 @@ export async function searchMatchesByTeam(teamName: string, limit = 50): Promise
     .from("matches")
     .select("*")
     .or(`home_team.ilike.%${safe}%,away_team.ilike.%${safe}%`)
-    .order("match_time", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(limit)
 
   if (error) {
@@ -138,7 +137,7 @@ export async function searchMatchesByTeam(teamName: string, limit = 50): Promise
 // Csapat statisztikák lekérdezése
 export async function getTeamStatistics(teamName: string): Promise<any> {
   if (!isSupabaseConfigured() || !supabase) {
-    return offlineSearchByTeam(teamName, 100)
+    throw new Error(SUPABASE_ERROR)
   }
 
   const safe = sanitizeIlikePattern(teamName)
@@ -147,7 +146,7 @@ export async function getTeamStatistics(teamName: string): Promise<any> {
     .from("matches")
     .select("*")
     .or(`home_team.ilike.%${safe}%,away_team.ilike.%${safe}%`)
-    .order("match_time", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(100)
 
   if (error) {
