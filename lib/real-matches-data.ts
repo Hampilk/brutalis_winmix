@@ -1,20 +1,26 @@
-import { supabase } from "./supabase"
+import { supabase, isSupabaseConfigured } from "./supabase"
 import type { Match } from "./supabase"
 
 // Valós adatok lekérdezése a Supabase adatbázisból
 export async function getRealMatchesData(homeTeam?: string, awayTeam?: string, limit = 100): Promise<Match[]> {
   try {
+    if (!supabase || !isSupabaseConfigured()) {
+      console.warn("Supabase nincs konfigurálva - valós adatok nem elérhetők")
+      return []
+    }
+
     let query = supabase.from("matches").select("*")
 
-    // Szűrés csapatok alapján
+    // Szűrés csapatok alapján - using individual filters to avoid parsing issues
     if (homeTeam && awayTeam) {
+      // Search for matches where either team can be home or away
       query = query.or(
-        `and(home_team.ilike.*${homeTeam}*,away_team.ilike.*${awayTeam}*),and(home_team.ilike.*${awayTeam}*,away_team.ilike.*${homeTeam}*)`,
+        `and(home_team.ilike.%${homeTeam}%,away_team.ilike.%${awayTeam}%),and(home_team.ilike.%${awayTeam}%,away_team.ilike.%${homeTeam}%)`,
       )
     } else if (homeTeam) {
-      query = query.or(`home_team.ilike.*${homeTeam}*,away_team.ilike.*${homeTeam}*`)
+      query = query.or(`home_team.ilike.%${homeTeam}%,away_team.ilike.%${homeTeam}%`)
     } else if (awayTeam) {
-      query = query.or(`home_team.ilike.*${awayTeam}*,away_team.ilike.*${awayTeam}*`)
+      query = query.or(`home_team.ilike.%${awayTeam}%,away_team.ilike.%${awayTeam}%`)
     }
 
     const { data, error } = await query.order("created_at", { ascending: false }).limit(limit)
@@ -44,6 +50,21 @@ export async function getTeamRealStatistics(teamName: string): Promise<{
   recentForm: Match[]
 }> {
   try {
+    if (!supabase || !isSupabaseConfigured()) {
+      console.warn("Supabase nincs konfigurálva - csapat statisztikák nem elérhetők")
+      return {
+        totalMatches: 0,
+        wins: 0,
+        draws: 0,
+        losses: 0,
+        goalsScored: 0,
+        goalsConceded: 0,
+        homeMatches: 0,
+        awayMatches: 0,
+        recentForm: [],
+      }
+    }
+
     const { data, error } = await supabase
       .from("matches")
       .select("*")
@@ -126,21 +147,37 @@ export async function getTeamRealStatistics(teamName: string): Promise<{
 // Head-to-head meccsek lekérdezése
 export async function getHeadToHeadMatches(team1: string, team2: string): Promise<Match[]> {
   try {
-    const { data, error } = await supabase
-      .from("matches")
-      .select("*")
-      .or(
-        `and(home_team.ilike.*${team1}*,away_team.ilike.*${team2}*),and(home_team.ilike.*${team2}*,away_team.ilike.*${team1}*)`,
-      )
-      .order("created_at", { ascending: false })
-      .limit(20)
-
-    if (error) {
-      console.error("Hiba a head-to-head meccsek lekérdezése során:", error)
+    if (!supabase || !isSupabaseConfigured()) {
+      console.warn("Supabase nincs konfigurálva - head-to-head adatok nem elérhetők")
       return []
     }
 
-    return data || []
+    // Execute two separate queries and combine results to avoid parsing issues
+    const [query1, query2] = await Promise.all([
+      supabase
+        .from("matches")
+        .select("*")
+        .ilike("home_team", `%${team1}%`)
+        .ilike("away_team", `%${team2}%`)
+        .order("created_at", { ascending: false })
+        .limit(10),
+      supabase
+        .from("matches")
+        .select("*")
+        .ilike("home_team", `%${team2}%`)
+        .ilike("away_team", `%${team1}%`)
+        .order("created_at", { ascending: false })
+        .limit(10),
+    ])
+
+    if (query1.error || query2.error) {
+      console.error("Hiba a head-to-head meccsek lekérdezése során:", query1.error || query2.error)
+      return []
+    }
+
+    // Combine and sort results
+    const allMatches = [...(query1.data || []), ...(query2.data || [])]
+    return allMatches.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 20)
   } catch (error) {
     console.error("Hiba a head-to-head meccsek lekérdezése során:", error)
     return []
@@ -158,6 +195,19 @@ export async function getLeagueStatistics(league = "spain"): Promise<{
   awayWinPercentage: number
 }> {
   try {
+    if (!supabase || !isSupabaseConfigured()) {
+      console.warn("Supabase nincs konfigurálva - liga statisztikák nem elérhetők")
+      return {
+        totalMatches: 0,
+        totalGoals: 0,
+        averageGoalsPerMatch: 0,
+        bothTeamsScoredPercentage: 0,
+        homeWinPercentage: 0,
+        drawPercentage: 0,
+        awayWinPercentage: 0,
+      }
+    }
+
     const { data, error } = await supabase.from("matches").select("*").eq("league", league).limit(1000)
 
     if (error || !data) {
