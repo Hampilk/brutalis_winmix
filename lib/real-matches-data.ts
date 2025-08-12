@@ -17,7 +17,7 @@ export async function getRealMatchesData(homeTeam?: string, awayTeam?: string, l
       query = query.or(`home_team.ilike.%${awayTeam}%,away_team.ilike.%${awayTeam}%`)
     }
 
-    const { data, error } = await query.order("match_time", { ascending: false }).limit(limit)
+    const { data, error } = await query.order("created_at", { ascending: false }).limit(limit)
 
     if (error) {
       console.error("Hiba a valós meccs adatok lekérdezése során:", error)
@@ -48,7 +48,7 @@ export async function getTeamRealStatistics(teamName: string): Promise<{
       .from("matches")
       .select("*")
       .or(`home_team.ilike.%${teamName}%,away_team.ilike.%${teamName}%`)
-      .order("match_time", { ascending: false })
+      .order("created_at", { ascending: false })
       .limit(50)
 
     if (error || !data) {
@@ -132,7 +132,7 @@ export async function getHeadToHeadMatches(team1: string, team2: string): Promis
       .or(
         `and(home_team.ilike.%${team1}%,away_team.ilike.%${team2}%),and(home_team.ilike.%${team2}%,away_team.ilike.%${team1}%)`,
       )
-      .order("match_time", { ascending: false })
+      .order("created_at", { ascending: false })
       .limit(20)
 
     if (error) {
