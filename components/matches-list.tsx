@@ -1,298 +1,213 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Search, Calendar, Users, Target, Loader2 } from "lucide-react"
-import { searchMatches, getTeamNames, searchMatchesByTeam } from "@/lib/matches"
-import { calculateStatistics } from "@/lib/football-statistics"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Loader2, Search, AlertCircle } from "lucide-react"
+import { searchMatches, getFormattedMatches } from "@/lib/matches"
+import { isSupabaseConfigured } from "@/lib/supabase"
 import type { Match } from "@/lib/supabase"
-import type { StatisticsResult } from "@/lib/football-statistics"
-import MiniStatsGrid from "./mini-stats-grid"
-import GeneralStatisticsCard from "./general-statistics-card"
-import TeamAnalysisCard from "./team-analysis-card"
-import AIPredictionsCard from "./ai-predictions-card"
-import PredictionCard from "./prediction-card"
-import EnhancedLegendModeCard from "./enhanced-legend-mode-card"
 
 export default function MatchesList() {
   const [matches, setMatches] = useState<Match[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [homeTeam, setHomeTeam] = useState("")
   const [awayTeam, setAwayTeam] = useState("")
-  const [teamNames, setTeamNames] = useState<string[]>([])
-  const [statistics, setStatistics] = useState<StatisticsResult | null>(null)
-  const [searchQuery, setSearchQuery] = useState("")
+  const [searching, setSearching] = useState(false)
+  const [isOfflineMode, setIsOfflineMode] = useState(false)
 
-  // Csapat nevek betöltése
+  // Check if we're in offline mode
   useEffect(() => {
-    const loadTeamNames = async () => {
-      try {
-        const names = await getTeamNames()
-        setTeamNames(names)
-      } catch (err) {
-        console.error("Hiba a csapat nevek betöltése során:", err)
-      }
-    }
-    loadTeamNames()
+    setIsOfflineMode(!isSupabaseConfigured())
   }, [])
 
-  // Keresés végrehajtása
-  const handleSearch = async () => {
-    setLoading(true)
-    setError(null)
+  // Load initial matches
+  useEffect(() => {
+    loadMatches()
+  }, [])
 
+  const loadMatches = async () => {
     try {
-      let searchResults: Match[] = []
-
-      if (homeTeam.trim() || awayTeam.trim()) {
-        // Specifikus csapat keresés
-        searchResults = await searchMatches(homeTeam.trim() || undefined, awayTeam.trim() || undefined, 100)
-      } else if (searchQuery.trim()) {
-        // Általános keresés
-        searchResults = await searchMatchesByTeam(searchQuery.trim(), 100)
-      } else {
-        // Ha nincs keresési feltétel, ne töltsünk be semmit
-        searchResults = []
-      }
-
-      setMatches(searchResults)
-
-      // Statisztikák számítása
-      if (searchResults.length > 0) {
-        const stats = calculateStatistics(searchResults, homeTeam.trim() || undefined, awayTeam.trim() || undefined)
-        setStatistics(stats)
-      } else {
-        setStatistics(null)
-      }
+      setLoading(true)
+      setError(null)
+      const formattedMatches = await getFormattedMatches(50)
+      // Convert FormattedMatch back to Match for display
+      const matchData = formattedMatches.map((fm) => ({
+        id: fm.id,
+        match_time: new Date().toISOString(), // Placeholder
+        home_team: fm.home_team,
+        away_team: fm.away_team,
+        half_time_home_goals: Number.parseInt(fm.half_time_result.split("-")[0]),
+        half_time_away_goals: Number.parseInt(fm.half_time_result.split("-")[1]),
+        full_time_home_goals: Number.parseInt(fm.result.split("-")[0]),
+        full_time_away_goals: Number.parseInt(fm.result.split("-")[1]),
+        league: "Unknown",
+        season: "2023/24",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }))
+      setMatches(matchData)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ismeretlen hiba történt")
-      setMatches([])
-      setStatistics(null)
+      console.error("Error loading matches:", err)
+      setError(err instanceof Error ? err.message : "Hiba történt a meccsek betöltése során")
     } finally {
       setLoading(false)
     }
   }
 
-  // Keresés törlése
-  const handleClearSearch = () => {
-    setHomeTeam("")
-    setAwayTeam("")
-    setSearchQuery("")
-    setMatches([])
-    setStatistics(null)
-    setError(null)
+  const handleSearch = async () => {
+    try {
+      setSearching(true)
+      setError(null)
+      const results = await searchMatches(homeTeam.trim() || undefined, awayTeam.trim() || undefined, 50)
+      setMatches(results)
+    } catch (err) {
+      console.error("Error searching matches:", err)
+      setError(err instanceof Error ? err.message : "Hiba történt a keresés során")
+    } finally {
+      setSearching(false)
+    }
   }
 
-  // Csapat név szűrés autocomplete-hez
-  const getFilteredTeamNames = (query: string) => {
-    if (!query.trim()) return []
-    return teamNames.filter((name) => name.toLowerCase().includes(query.toLowerCase())).slice(0, 10)
+  const clearSearch = () => {
+    setHomeTeam("")
+    setAwayTeam("")
+    loadMatches()
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Meccsek betöltése...</span>
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-8">
-      {/* Keresési panel */}
-      <Card className="rounded-3xl shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+    <div className="space-y-6">
+      {/* Offline Mode Banner */}
+      {isOfflineMode && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <strong>Offline Demo Mód:</strong> Az alkalmazás demo adatokkal fut, mivel a Supabase nincs konfigurálva. A
+            keresés és statisztikák továbbra is működnek a mintaadatokon.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Search Form */}
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Search className="h-5 w-5" />
-            Meccsek keresése
+            Meccs keresés
           </CardTitle>
+          <CardDescription>Keress meccseket hazai és/vagy vendég csapat alapján</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Csapat specifikus keresés */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Hazai csapat</label>
-              <div className="relative">
-                <Input
-                  placeholder="pl. Barcelona"
-                  value={homeTeam}
-                  onChange={(e) => setHomeTeam(e.target.value)}
-                  className="rounded-2xl"
-                />
-                {homeTeam && (
-                  <div className="absolute top-full left-0 right-0 bg-white border rounded-lg shadow-lg z-10 max-h-40 overflow-y-auto">
-                    {getFilteredTeamNames(homeTeam).map((name, index) => (
-                      <button
-                        key={index}
-                        className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm"
-                        onClick={() => setHomeTeam(name)}
-                      >
-                        {name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+        <CardContent>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <Input
+                placeholder="Hazai csapat..."
+                value={homeTeam}
+                onChange={(e) => setHomeTeam(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              />
             </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Vendég csapat</label>
-              <div className="relative">
-                <Input
-                  placeholder="pl. Real Madrid"
-                  value={awayTeam}
-                  onChange={(e) => setAwayTeam(e.target.value)}
-                  className="rounded-2xl"
-                />
-                {awayTeam && (
-                  <div className="absolute top-full left-0 right-0 bg-white border rounded-lg shadow-lg z-10 max-h-40 overflow-y-auto">
-                    {getFilteredTeamNames(awayTeam).map((name, index) => (
-                      <button
-                        key={index}
-                        className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm"
-                        onClick={() => setAwayTeam(name)}
-                      >
-                        {name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+            <div className="flex-1">
+              <Input
+                placeholder="Vendég csapat..."
+                value={awayTeam}
+                onChange={(e) => setAwayTeam(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              />
             </div>
-          </div>
-
-          {/* Általános keresés */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Vagy keresés csapat név alapján</label>
-            <Input
-              placeholder="Csapat neve..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="rounded-2xl"
-            />
-          </div>
-
-          {/* Keresési gombok */}
-          <div className="flex gap-2">
-            <Button onClick={handleSearch} disabled={loading} className="rounded-2xl">
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Keresés...
-                </>
-              ) : (
-                <>
-                  <Search className="h-4 w-4 mr-2" />
-                  Keresés
-                </>
-              )}
-            </Button>
-            <Button variant="outline" onClick={handleClearSearch} className="rounded-2xl bg-transparent">
-              Törlés
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={handleSearch} disabled={searching}>
+                {searching ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Keresés...
+                  </>
+                ) : (
+                  <>
+                    <Search className="h-4 w-4 mr-2" />
+                    Keresés
+                  </>
+                )}
+              </Button>
+              <Button variant="outline" onClick={clearSearch}>
+                Törlés
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Hiba megjelenítése */}
+      {/* Error Display */}
       {error && (
-        <Card className="rounded-3xl shadow-lg border-0 bg-red-50/80 backdrop-blur-sm">
-          <CardContent className="p-6">
-            <div className="text-red-600 text-center">
-              <p className="font-semibold">Hiba történt:</p>
-              <p>{error}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
-      {/* Mini statisztikák */}
-      {statistics && <MiniStatsGrid statistics={statistics} />}
-
-      {/* Statisztikai kártyák */}
-      {statistics && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <GeneralStatisticsCard statistics={statistics} />
-          <TeamAnalysisCard statistics={statistics} />
-          <AIPredictionsCard statistics={statistics} />
+      {/* Results */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold">Meccsek ({matches.length})</h2>
+          {isOfflineMode && <Badge variant="secondary">Demo adatok</Badge>}
         </div>
-      )}
 
-      {/* LEGEND MODE és Predikciók */}
-      {homeTeam.trim() && awayTeam.trim() && (
-        <div className="space-y-6">
-          <EnhancedLegendModeCard homeTeam={homeTeam.trim()} awayTeam={awayTeam.trim()} />
-          <PredictionCard homeTeam={homeTeam.trim()} awayTeam={awayTeam.trim()} />
-        </div>
-      )}
-
-      {/* Meccsek listája */}
-      {matches.length > 0 && (
-        <Card className="rounded-3xl shadow-lg border-0 bg-white/80 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Találatok ({matches.length} meccs)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {matches.map((match) => (
-                <div
-                  key={match.id}
-                  className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="text-sm text-slate-600">
-                      {new Date(match.match_time).toLocaleDateString("hu-HU")}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{match.home_team}</span>
-                      <span className="text-slate-600">vs</span>
-                      <span className="font-medium">{match.away_team}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <div className="font-bold text-lg">
-                        {match.full_time_home_goals} - {match.full_time_away_goals}
-                      </div>
-                      <div className="text-sm text-slate-600">
-                        FT ({match.half_time_home_goals} - {match.half_time_away_goals} HT)
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Badge variant="secondary" className="text-xs">
-                        <Target className="h-3 w-3 mr-1" />
-                        {match.full_time_home_goals + match.full_time_away_goals} gól
-                      </Badge>
-                      {match.full_time_home_goals > 0 && match.full_time_away_goals > 0 && (
-                        <Badge variant="default" className="text-xs">
-                          <Users className="h-3 w-3 mr-1" />
-                          BTTS
+        {matches.length === 0 ? (
+          <Card>
+            <CardContent className="py-8 text-center text-muted-foreground">
+              Nem találhatók meccsek a megadott kritériumokkal.
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4">
+            {matches.map((match) => (
+              <Card key={match.id} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-4 mb-2">
+                        <span className="font-semibold text-lg">{match.home_team}</span>
+                        <Badge variant="outline" className="text-lg font-bold">
+                          {match.full_time_home_goals}-{match.full_time_away_goals}
                         </Badge>
-                      )}
+                        <span className="font-semibold text-lg">{match.away_team}</span>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <span>
+                          Félidő: {match.half_time_home_goals}-{match.half_time_away_goals}
+                        </span>
+                        {match.league && <Badge variant="secondary">{match.league}</Badge>}
+                        {match.season && <Badge variant="outline">{match.season}</Badge>}
+                      </div>
+                    </div>
+                    <div className="text-right text-sm text-muted-foreground">
+                      <div>Gólok: {match.full_time_home_goals + match.full_time_away_goals}</div>
+                      <div>
+                        {match.full_time_home_goals > 0 && match.full_time_away_goals > 0
+                          ? "Mindkét csapat szerzett gólt"
+                          : "Nem mindkét csapat szerzett gólt"}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Üres állapot */}
-      {!loading && matches.length === 0 && !error && (homeTeam.trim() || awayTeam.trim() || searchQuery.trim()) && (
-        <Card className="rounded-3xl shadow-lg border-0 bg-white/80 backdrop-blur-sm">
-          <CardContent className="p-8">
-            <div className="text-center">
-              <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
-                <Search className="h-8 w-8 text-slate-400" />
-              </div>
-              <h3 className="text-lg font-semibold text-slate-800 mb-2">Nincs találat</h3>
-              <p className="text-slate-600">Próbálj meg más keresési feltételeket.</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
