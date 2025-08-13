@@ -1,15 +1,31 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+@font-face {
+  font-family: "Inter";
+  src: url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+}
+
+@font-face {
+  font-family: "Poppins";
+  src: url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap");
+}
 
 :root {
+  --winmix-primary: #a3e635;
+  --winmix-primary-dark: #84cc16;
+  --winmix-bg: #0c0d11;
+  --winmix-card: #111318;
+  --winmix-border: rgba(255, 255, 255, 0.1);
+  --winmix-text: #ffffff;
+  --winmix-text-muted: #9ca3af;
+  --winmix-text-secondary: #6b7280;
   --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --foreground: oklch(0.145 0 0 0);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.145 0 0 0);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.145 0 0 0);
   --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
@@ -40,6 +56,12 @@
 }
 
 .dark {
+  --winmix-bg: #0c0d11;
+  --winmix-card: #111318;
+  --winmix-border: rgba(255, 255, 255, 0.1);
+  --winmix-text: #ffffff;
+  --winmix-text-muted: #9ca3af;
+  --winmix-text-secondary: #6b7280;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.145 0 0);
@@ -121,4 +143,60 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+.font-poppins {
+  font-family: "Poppins", sans-serif;
+}
+
+/* Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(2rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes glow {
+  from {
+    box-shadow: 0 0 20px rgba(163, 230, 53, 0.4), 0 0 40px rgba(163, 230, 53, 0.2);
+  }
+  to {
+    box-shadow: 0 0 40px rgba(163, 230, 53, 0.6), 0 0 60px rgba(163, 230, 53, 0.3);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeInUp 0.7s ease-out;
+}
+
+.animate-glow {
+  animation: glow 2.5s ease-in-out infinite alternate;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--winmix-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--winmix-primary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--winmix-primary-dark);
+}
+
+/* Utility classes */
+.blur-12 {
+  filter: blur(3rem);
 }
