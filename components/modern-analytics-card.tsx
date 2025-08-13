@@ -1,5 +1,9 @@
+"use client"
+
 import { Card, CardContent } from "@/components/ui/card"
-import { TrendingUp, Clock, AlertCircle } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { TrendingUp } from "lucide-react"
+import { useEffect, useRef } from "react"
 import type { StatisticsResult } from "@/lib/football-statistics"
 
 interface ModernAnalyticsCardProps {
@@ -7,63 +11,113 @@ interface ModernAnalyticsCardProps {
 }
 
 export default function ModernAnalyticsCard({ statistics }: ModernAnalyticsCardProps) {
-  const features = [
-    {
-      icon: TrendingUp,
-      text: "Heti trendvonal gördülő átlaggal",
-    },
-    {
-      icon: Clock,
-      text: "Meccs, gól és eredmény idő bontása",
-    },
-    {
-      icon: AlertCircle,
-      text: "Intelligens riasztások statisztikai kiugrások esetén",
-    },
-  ]
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+
+    // Set canvas size
+    canvas.width = canvas.offsetWidth * 2
+    canvas.height = canvas.offsetHeight * 2
+    ctx.scale(2, 2)
+
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.offsetWidth, canvas.offsetHeight)
+
+    // Sample data for visualization
+    const data = [
+      statistics.general_stats.average_goals.average_home_goals,
+      statistics.general_stats.average_goals.average_away_goals,
+      statistics.general_stats.average_goals.average_total_goals,
+      statistics.general_stats.both_teams_scored_percentage / 10, // Scale down for visualization
+    ]
+
+    const maxValue = Math.max(...data)
+    const padding = 40
+    const chartWidth = canvas.offsetWidth - padding * 2
+    const chartHeight = canvas.offsetHeight - padding * 2
+
+    // Draw grid lines
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.1)"
+    ctx.lineWidth = 1
+    for (let i = 0; i <= 5; i++) {
+      const y = padding + (chartHeight / 5) * i
+      ctx.beginPath()
+      ctx.moveTo(padding, y)
+      ctx.lineTo(padding + chartWidth, y)
+      ctx.stroke()
+    }
+
+    // Draw line chart
+    ctx.strokeStyle = "#A3E635"
+    ctx.lineWidth = 3
+    ctx.beginPath()
+
+    data.forEach((value, index) => {
+      const x = padding + (chartWidth / (data.length - 1)) * index
+      const y = padding + chartHeight - (value / maxValue) * chartHeight
+
+      if (index === 0) {
+        ctx.moveTo(x, y)
+      } else {
+        ctx.lineTo(x, y)
+      }
+
+      // Draw points
+      ctx.fillStyle = "#A3E635"
+      ctx.beginPath()
+      ctx.arc(x, y, 4, 0, Math.PI * 2)
+      ctx.fill()
+    })
+
+    ctx.stroke()
+
+    // Add glow effect
+    ctx.shadowColor = "#A3E635"
+    ctx.shadowBlur = 10
+    ctx.stroke()
+  }, [statistics])
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-24 items-center">
-      <div className="space-y-8">
-        <h2 className="text-5xl font-black text-white leading-tight">Meccs eredmény analitika</h2>
-        <p className="text-xl text-gray-400 leading-relaxed max-w-2xl">
-          Szűk keresztmetszetek felismerése mielőtt rossz fogadásokat tennénk. A Football Analytics minden meccset, gólt
-          és eredményt elemez, hogy kristálytiszta képet adjon a csapat teljesítményéről.
-        </p>
-        <ul className="space-y-5">
-          {features.map((feature, index) => (
-            <li key={index} className="flex items-center gap-4 text-gray-400 hover:text-white transition-colors">
-              <div className="w-10 h-10 bg-[#A3E635]/10 rounded-xl flex items-center justify-center text-[#A3E635] transition-transform hover:scale-110">
-                <feature.icon className="w-5 h-5" />
-              </div>
-              <span className="font-medium">{feature.text}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
+    <div className="relative">
+      <div className="absolute inset-[-6rem] bg-gradient-to-r from-[#A3E635]/20 via-[#A3E635]/10 to-transparent rounded-3xl filter blur-12 animate-pulse"></div>
+      <Card className="relative bg-[#111318] border-white/10 rounded-3xl overflow-hidden">
+        <CardContent className="p-10">
+          <div className="flex items-center gap-3 mb-8 text-sm font-semibold text-gray-400">
+            <TrendingUp className="w-4 h-4 text-[#A3E635]" />
+            <span>Statisztikai Elemzés – Utolsó Meccsek</span>
+          </div>
 
-      <div className="relative">
-        <div className="absolute inset-[-6rem] bg-gradient-to-r from-[#A3E635]/20 via-[#A3E635]/10 to-transparent rounded-3xl blur-12 animate-pulse"></div>
-        <Card className="relative bg-[#111318] border-white/10 shadow-[0_25px_50px_rgba(0,0,0,0.5)]">
-          <CardContent className="p-10">
-            <div className="flex items-center gap-3 mb-8 text-sm font-semibold text-gray-400">
-              <TrendingUp className="w-4 h-4 text-[#A3E635]" />
-              <span>Meccs Statisztikák – Utolsó {statistics.totalMatches} Meccs</span>
-            </div>
-            <div className="h-96 flex items-center justify-center">
-              <div className="text-center space-y-4">
-                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#A3E635] to-[#A3E635]/80 flex items-center justify-center text-black font-black text-2xl shadow-[0_8px_25px_rgba(163,230,53,0.4)]">
-                  {Math.round(statistics.averageGoals * 10)}%
-                </div>
-                <div className="space-y-2">
-                  <p className="text-2xl font-black text-white">{statistics.averageGoals.toFixed(1)} átlag gól</p>
-                  <p className="text-gray-400">{statistics.totalMatches} meccs alapján</p>
+          <div className="h-96 relative">
+            <canvas ref={canvasRef} className="w-full h-full" style={{ width: "100%", height: "100%" }} />
+          </div>
+
+          {statistics.team_analysis && (
+            <div className="mt-8 space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-400">Forma Index</span>
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-[#A3E635]/20 text-[#A3E635]">
+                    Hazai: {statistics.team_analysis.home_form_index}%
+                  </Badge>
+                  <Badge className="bg-blue-400/20 text-blue-400">
+                    Vendég: {statistics.team_analysis.away_form_index}%
+                  </Badge>
                 </div>
               </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-400">H2H Meccsek</span>
+                <Badge className="bg-white/10 text-gray-300">{statistics.team_analysis.matches_count} meccs</Badge>
+              </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

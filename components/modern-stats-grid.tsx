@@ -11,28 +11,28 @@ export default function ModernStatsGrid({ statistics }: ModernStatsGridProps) {
   const stats = [
     {
       title: "Összes Meccs",
-      value: statistics.totalMatches.toString(),
+      value: statistics.total_matches.toString(),
       icon: BarChart3,
       color: "text-[#A3E635]",
       bgColor: "bg-[#A3E635]/20",
     },
     {
       title: "Átlag Gólok",
-      value: statistics.averageGoals.toFixed(1),
+      value: statistics.general_stats.average_goals.average_total_goals.toFixed(1),
       icon: Target,
       color: "text-blue-400",
       bgColor: "bg-blue-400/20",
     },
     {
       title: "BTTS Arány",
-      value: `${Math.round(statistics.bttsPercentage)}%`,
+      value: `${Math.round(statistics.general_stats.both_teams_scored_percentage)}%`,
       icon: Users,
       color: "text-purple-400",
       bgColor: "bg-purple-400/20",
     },
     {
-      title: "Győzelmi Arány",
-      value: `${Math.round((statistics.homeWins / statistics.totalMatches) * 100)}%`,
+      title: "Hazai Gólok",
+      value: statistics.general_stats.average_goals.average_home_goals.toFixed(1),
       icon: TrendingUp,
       color: "text-orange-400",
       bgColor: "bg-orange-400/20",
@@ -40,7 +40,7 @@ export default function ModernStatsGrid({ statistics }: ModernStatsGridProps) {
   ]
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       {stats.map((stat, index) => (
         <Card
           key={index}
