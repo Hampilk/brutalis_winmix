@@ -1,9 +1,9 @@
-import ModernMatchesList from "@/components/modern-matches-list"
+import StatsAppDashboard from "@/components/stats-app-dashboard"
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-[#0c0d11] text-white">
-      <ModernMatchesList />
+    <main className="min-h-screen bg-[#0a0b0f]">
+      <StatsAppDashboard />
     </main>
   )
 }
