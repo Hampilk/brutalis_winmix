@@ -9,10 +9,41 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
 import { Search, TrendingUp, Target, BarChart3, Zap, Calendar, Users, Trophy, Activity } from "lucide-react"
-import { searchMatches, calculateStatistics } from "@/lib/matches"
+import { searchMatches } from "@/lib/matches"
+import { calculateStatistics } from "@/lib/football-statistics"
 import { PredictionsPanel } from "@/components/PredictionsPanel"
-import { usePredictionsRealTime } from "@/hooks/useRealTimeData"
-import type { Match, StatisticsResult } from "@/types/match"
+import { usePredictionsRealTime } from "@/src/hooks/useRealTimeData"
+
+interface Match {
+  id: number
+  home_team: string
+  away_team: string
+  full_time_home_goals: number
+  full_time_away_goals: number
+  half_time_home_goals: number
+  half_time_away_goals: number
+  match_time: string
+}
+
+interface StatisticsResult {
+  total_matches: number
+  both_teams_scored_percentage: number
+  average_goals: {
+    average_total_goals: number
+    average_home_goals: number
+    average_away_goals: number
+  }
+  home_form_index: number
+  away_form_index: number
+  head_to_head_stats: {
+    home_wins: number
+    away_wins: number
+    draws: number
+    home_win_percentage: number
+    away_win_percentage: number
+    draw_percentage: number
+  }
+}
 
 export default function ModernMatchesList() {
   const [homeTeam, setHomeTeam] = useState("")
@@ -36,11 +67,13 @@ export default function ModernMatchesList() {
     setLoading(true)
     try {
       const searchResults = await searchMatches(homeTeam, awayTeam)
-      setMatches(searchResults.matches)
-      setHomeMatches(searchResults.homeMatches)
-      setAwayMatches(searchResults.awayMatches)
+      setMatches(searchResults)
 
-      const stats = await calculateStatistics(searchResults.matches)
+      // Mock additional data for now
+      setHomeMatches(searchResults.slice(0, Math.floor(searchResults.length / 2)))
+      setAwayMatches(searchResults.slice(Math.floor(searchResults.length / 2)))
+
+      const stats = calculateStatistics(searchResults, homeTeam, awayTeam)
       setStatistics(stats)
 
       setActiveTab("results")

@@ -1,10 +1,10 @@
 import { supabase } from "@/lib/supabase"
+import { cacheUtils } from "@/lib/cache-utils"
 
 export interface PredictionParams {
   homeTeam: string
   awayTeam: string
   league?: string
-  matchDate?: string
 }
 
 export interface PredictionResult {
@@ -19,48 +19,36 @@ export interface PredictionResult {
   over25_probability: number
   confidence_score: number
   key_factors: string[]
-  prediction_source: "edge" | "local"
+  model_version: string
   generated_at: string
   expires_at: string
-  model_version: string
+  prediction_source: "edge" | "local"
 }
 
 export interface AccuracyStats {
   total_predictions: number
   correct_predictions: number
   accuracy_percentage: number
-  average_confidence: number
   brier_score: number
-  calibration_data: Array<{
-    predicted_probability: number
-    actual_frequency: number
-    count: number
-  }>
+  calibration_score: number
 }
 
 class PredictionService {
-  private cache = new Map<string, PredictionResult>()
-  private readonly CACHE_DURATION = 30 * 60 * 1000 // 30 minutes
-
-  private getCacheKey(params: PredictionParams): string {
-    return `${params.homeTeam}-${params.awayTeam}-${params.league || "default"}-${params.matchDate || "today"}`
-  }
-
-  private isCacheValid(prediction: PredictionResult): boolean {
-    const expiresAt = new Date(prediction.expires_at)
-    return expiresAt > new Date()
+  private cacheKey(params: PredictionParams): string {
+    return `prediction_${params.homeTeam}_${params.awayTeam}_${params.league || "default"}`
   }
 
   async fetchPredictions(params: PredictionParams): Promise<PredictionResult | null> {
-    const cacheKey = this.getCacheKey(params)
-    const cached = this.cache.get(cacheKey)
-
-    // Return cached result if valid
-    if (cached && this.isCacheValid(cached)) {
-      return cached
-    }
-
     try {
+      // Check cache first
+      const cacheKey = this.cacheKey(params)
+      const cached = cacheUtils.get<PredictionResult>(cacheKey)
+
+      if (cached && new Date(cached.expires_at) > new Date()) {
+        return { ...cached, prediction_source: "edge" }
+      }
+
+      // Fetch from Supabase
       const { data, error } = await supabase
         .from("predictions")
         .select("*")
@@ -72,8 +60,8 @@ class PredictionService {
         .limit(1)
         .single()
 
-      if (error) {
-        console.warn("Failed to fetch prediction from database:", error)
+      if (error || !data) {
+        console.log("No prediction found in database:", error?.message)
         return null
       }
 
@@ -82,21 +70,22 @@ class PredictionService {
         home_team: data.home_team,
         away_team: data.away_team,
         league: data.league,
-        home_win_probability: data.features?.home_win_probability || 0.33,
-        draw_probability: data.features?.draw_probability || 0.33,
-        away_win_probability: data.features?.away_win_probability || 0.33,
-        btts_probability: data.features?.btts_probability || 0.5,
-        over25_probability: data.features?.over25_probability || 0.5,
-        confidence_score: data.features?.confidence_score || 0.5,
-        key_factors: data.features?.key_factors || [],
-        prediction_source: "edge",
+        home_win_probability: data.prediction?.home_win_probability || 0.33,
+        draw_probability: data.prediction?.draw_probability || 0.33,
+        away_win_probability: data.prediction?.away_win_probability || 0.33,
+        btts_probability: data.prediction?.btts_probability || 0.5,
+        over25_probability: data.prediction?.over25_probability || 0.5,
+        confidence_score: data.prediction?.confidence_score || 0.5,
+        key_factors: data.prediction?.key_factors || [],
+        model_version: data.model_version,
         generated_at: data.generated_at,
         expires_at: data.expires_at,
-        model_version: data.model_version,
+        prediction_source: "edge",
       }
 
       // Cache the result
-      this.cache.set(cacheKey, prediction)
+      cacheUtils.set(cacheKey, prediction, 3600) // 1 hour cache
+
       return prediction
     } catch (error) {
       console.error("Error fetching predictions:", error)
@@ -106,20 +95,20 @@ class PredictionService {
 
   async triggerUpdate(params: PredictionParams): Promise<boolean> {
     try {
-      const { data, error } = await supabase.rpc("calculate_all_features_batch", {
+      const { error } = await supabase.rpc("update_enhanced_predictions", {
         p_home_team: params.homeTeam,
         p_away_team: params.awayTeam,
         p_league: params.league || "Premier League",
       })
 
       if (error) {
-        console.error("Failed to trigger prediction update:", error)
+        console.error("Error triggering prediction update:", error)
         return false
       }
 
-      // Clear cache to force fresh fetch
-      const cacheKey = this.getCacheKey(params)
-      this.cache.delete(cacheKey)
+      // Clear cache to force refresh
+      const cacheKey = this.cacheKey(params)
+      cacheUtils.delete(cacheKey)
 
       return true
     } catch (error) {
@@ -128,27 +117,29 @@ class PredictionService {
     }
   }
 
-  async getAccuracyStats(dateFrom: string, dateTo: string): Promise<AccuracyStats | null> {
+  async getAccuracyStats(dateFrom?: string, dateTo?: string): Promise<AccuracyStats | null> {
     try {
       const { data, error } = await supabase.rpc("get_prediction_accuracy_stats", {
-        date_from: dateFrom,
-        date_to: dateTo,
+        date_from: dateFrom || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+        date_to: dateTo || new Date().toISOString(),
       })
 
-      if (error) {
-        console.error("Failed to fetch accuracy stats:", error)
+      if (error || !data) {
+        console.error("Error fetching accuracy stats:", error)
         return null
       }
 
-      return data as AccuracyStats
+      return {
+        total_predictions: data.total_predictions || 0,
+        correct_predictions: data.correct_predictions || 0,
+        accuracy_percentage: data.accuracy_percentage || 0,
+        brier_score: data.brier_score || 1,
+        calibration_score: data.calibration_score || 0,
+      }
     } catch (error) {
       console.error("Error fetching accuracy stats:", error)
       return null
     }
-  }
-
-  clearCache(): void {
-    this.cache.clear()
   }
 }
 

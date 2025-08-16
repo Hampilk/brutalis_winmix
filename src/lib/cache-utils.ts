@@ -1,20 +1,21 @@
 interface CacheItem<T> {
   data: T
   timestamp: number
-  expires_at: string
+  expiresAt: number
 }
 
-class CacheManager {
+class CacheUtils {
   private cache = new Map<string, CacheItem<any>>()
-  private readonly DEFAULT_TTL = 30 * 60 * 1000 // 30 minutes
+  private readonly DEFAULT_TTL = 3600 // 1 hour in seconds
 
-  set<T>(key: string, data: T, expiresAt?: string): void {
-    const expires_at = expiresAt || new Date(Date.now() + this.DEFAULT_TTL).toISOString()
+  set<T>(key: string, data: T, ttlSeconds: number = this.DEFAULT_TTL): void {
+    const now = Date.now()
+    const expiresAt = now + ttlSeconds * 1000
 
     this.cache.set(key, {
       data,
-      timestamp: Date.now(),
-      expires_at,
+      timestamp: now,
+      expiresAt,
     })
   }
 
@@ -25,27 +26,12 @@ class CacheManager {
       return null
     }
 
-    // Check if expired
-    const expiresAt = new Date(item.expires_at)
-    if (expiresAt <= new Date()) {
+    if (Date.now() > item.expiresAt) {
       this.cache.delete(key)
       return null
     }
 
     return item.data as T
-  }
-
-  has(key: string): boolean {
-    const item = this.cache.get(key)
-    if (!item) return false
-
-    const expiresAt = new Date(item.expires_at)
-    if (expiresAt <= new Date()) {
-      this.cache.delete(key)
-      return false
-    }
-
-    return true
   }
 
   delete(key: string): boolean {
@@ -56,77 +42,62 @@ class CacheManager {
     this.cache.clear()
   }
 
-  // Clean up expired items
-  cleanup(): void {
-    const now = new Date()
+  has(key: string): boolean {
+    const item = this.cache.get(key)
+
+    if (!item) {
+      return false
+    }
+
+    if (Date.now() > item.expiresAt) {
+      this.cache.delete(key)
+      return false
+    }
+
+    return true
+  }
+
+  size(): number {
+    // Clean expired items first
+    this.cleanExpired()
+    return this.cache.size
+  }
+
+  keys(): string[] {
+    this.cleanExpired()
+    return Array.from(this.cache.keys())
+  }
+
+  private cleanExpired(): void {
+    const now = Date.now()
+
     for (const [key, item] of this.cache.entries()) {
-      const expiresAt = new Date(item.expires_at)
-      if (expiresAt <= now) {
+      if (now > item.expiresAt) {
         this.cache.delete(key)
       }
     }
   }
 
-  // Get cache statistics
-  getStats(): {
-    size: number
-    expired: number
-    valid: number
-  } {
-    const now = new Date()
-    let expired = 0
-    let valid = 0
+  // Prediction-specific utilities
+  getPredictionKey(homeTeam: string, awayTeam: string, league?: string): string {
+    return `prediction_${homeTeam}_${awayTeam}_${league || "default"}`
+  }
 
-    for (const item of this.cache.values()) {
-      const expiresAt = new Date(item.expires_at)
-      if (expiresAt <= now) {
-        expired++
-      } else {
-        valid++
-      }
-    }
+  getStatsKey(dateFrom: string, dateTo: string): string {
+    return `stats_${dateFrom}_${dateTo}`
+  }
+
+  // Get cache statistics
+  getStats() {
+    this.cleanExpired()
 
     return {
-      size: this.cache.size,
-      expired,
-      valid,
+      totalItems: this.cache.size,
+      memoryUsage: JSON.stringify(Array.from(this.cache.entries())).length,
+      oldestItem: Math.min(...Array.from(this.cache.values()).map((item) => item.timestamp)),
+      newestItem: Math.max(...Array.from(this.cache.values()).map((item) => item.timestamp)),
     }
   }
 }
 
-export const cacheManager = new CacheManager()
-
-// Prediction-specific cache utilities
-export const predictionCache = {
-  getKey: (homeTeam: string, awayTeam: string, league = "default") => `prediction:${homeTeam}:${awayTeam}:${league}`,
-
-  set: (homeTeam: string, awayTeam: string, prediction: any, league = "default") => {
-    const key = predictionCache.getKey(homeTeam, awayTeam, league)
-    cacheManager.set(key, prediction, prediction.expires_at)
-  },
-
-  get: (homeTeam: string, awayTeam: string, league = "default") => {
-    const key = predictionCache.getKey(homeTeam, awayTeam, league)
-    return cacheManager.get(key)
-  },
-
-  has: (homeTeam: string, awayTeam: string, league = "default") => {
-    const key = predictionCache.getKey(homeTeam, awayTeam, league)
-    return cacheManager.has(key)
-  },
-
-  delete: (homeTeam: string, awayTeam: string, league = "default") => {
-    const key = predictionCache.getKey(homeTeam, awayTeam, league)
-    return cacheManager.delete(key)
-  },
-}
-
-// Auto cleanup every 5 minutes
-if (typeof window !== "undefined") {
-  setInterval(
-    () => {
-      cacheManager.cleanup()
-    },
-    5 * 60 * 1000,
-  )
-}
+export const cacheUtils = new CacheUtils()

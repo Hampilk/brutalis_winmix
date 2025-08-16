@@ -1,75 +1,52 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 
-export interface RealTimeConfig {
+interface UseRealTimeDataOptions {
   table: string
-  event?: "INSERT" | "UPDATE" | "DELETE" | "*"
   filter?: string
-  onUpdate?: (payload: any) => void
   onInsert?: (payload: any) => void
+  onUpdate?: (payload: any) => void
   onDelete?: (payload: any) => void
 }
 
-export function useRealTimeData(config: RealTimeConfig) {
+export function useRealTimeData(options: UseRealTimeDataOptions) {
   const [isConnected, setIsConnected] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [channel, setChannel] = useState<RealtimeChannel | null>(null)
 
-  const { table, event = "*", filter, onUpdate, onInsert, onDelete } = config
-
-  const handlePayload = useCallback(
-    (payload: any) => {
-      const { eventType, new: newRecord, old: oldRecord } = payload
-
-      switch (eventType) {
-        case "INSERT":
-          onInsert?.(newRecord)
-          break
-        case "UPDATE":
-          onUpdate?.(newRecord)
-          break
-        case "DELETE":
-          onDelete?.(oldRecord)
-          break
-      }
-    },
-    [onInsert, onUpdate, onDelete],
-  )
-
   useEffect(() => {
-    if (!supabase) {
-      setError("Supabase client not initialized")
-      return
-    }
+    if (!supabase) return
 
-    const channelName = `realtime-${table}-${Date.now()}`
+    const channelName = `realtime-${options.table}-${Date.now()}`
     const newChannel = supabase.channel(channelName)
 
-    let subscription = newChannel.on(
+    const channelBuilder = newChannel.on(
       "postgres_changes",
       {
-        event: event,
+        event: "*",
         schema: "public",
-        table: table,
-        filter: filter,
+        table: options.table,
+        filter: options.filter,
       },
-      handlePayload,
+      (payload) => {
+        switch (payload.eventType) {
+          case "INSERT":
+            options.onInsert?.(payload.new)
+            break
+          case "UPDATE":
+            options.onUpdate?.(payload.new)
+            break
+          case "DELETE":
+            options.onDelete?.(payload.old)
+            break
+        }
+      },
     )
 
-    subscription = subscription.subscribe((status) => {
-      if (status === "SUBSCRIBED") {
-        setIsConnected(true)
-        setError(null)
-      } else if (status === "CHANNEL_ERROR") {
-        setIsConnected(false)
-        setError("Failed to connect to real-time updates")
-      } else if (status === "TIMED_OUT") {
-        setIsConnected(false)
-        setError("Real-time connection timed out")
-      }
+    channelBuilder.subscribe((status) => {
+      setIsConnected(status === "SUBSCRIBED")
     })
 
     setChannel(newChannel)
@@ -79,36 +56,19 @@ export function useRealTimeData(config: RealTimeConfig) {
       setChannel(null)
       setIsConnected(false)
     }
-  }, [table, event, filter, handlePayload])
+  }, [options.table, options.filter])
 
-  const reconnect = useCallback(() => {
-    if (channel) {
-      channel.unsubscribe()
-    }
-    // Trigger re-initialization by updating a dependency
-    setError(null)
-  }, [channel])
-
-  return {
-    isConnected,
-    error,
-    reconnect,
-  }
+  return { isConnected, channel }
 }
 
-// Specialized hook for predictions real-time updates
-export function usePredictionsRealTime(
-  homeTeam?: string,
-  awayTeam?: string,
-  onPredictionUpdate?: (prediction: any) => void,
-) {
-  const filter = homeTeam && awayTeam ? `home_team=eq.${homeTeam},away_team=eq.${awayTeam}` : undefined
+// Specialized hook for predictions
+export function usePredictionsRealTime(homeTeam: string, awayTeam: string, onUpdate?: (prediction: any) => void) {
+  const filter = homeTeam && awayTeam ? `home_team=eq.${homeTeam}&away_team=eq.${awayTeam}` : undefined
 
   return useRealTimeData({
     table: "predictions",
-    event: "*",
     filter,
-    onInsert: onPredictionUpdate,
-    onUpdate: onPredictionUpdate,
+    onInsert: onUpdate,
+    onUpdate: onUpdate,
   })
 }
